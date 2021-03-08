@@ -30,27 +30,16 @@ const (
 	port = "50051"
 )
 
+var lastIndexKey = "Last"
+var lastNegIndexKey = "LastNeg"
+
 var defaultAddress = host + ":" + port
 
 type fibonacciContainer interface {
 	GetFibonacciValue(index int64) int64
 }
 
-type fibonacciStorage struct {
-	Storage []int32
-}
-
 type fibonacciMemcache struct {
-}
-
-func (storage fibonacciStorage) GetFibonacciValue(index int32) int32 {
-	if int(index) > len(storage.Storage) {
-		for i := len(storage.Storage); i < int(index); i++ {
-			storage.Storage = append(storage.Storage, storage.Storage[i-2]+storage.Storage[i-1])
-		}
-		return storage.Storage[index-1]
-	}
-	return storage.Storage[index-1]
 }
 
 func (storage fibonacciMemcache) GetMemcacheAdress() string {
@@ -85,45 +74,96 @@ func (storage fibonacciMemcache) GetValue(key string) (int64, error) {
 	return 0, err
 }
 
+func (storage fibonacciMemcache) init() error {
+	err := storage.SaveValue(strconv.Itoa(0), 0)
+	if err != nil {
+		return err
+	}
+	err = storage.SaveValue(strconv.Itoa(1), 1)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (storage fibonacciMemcache) GetNextPositive(index int64) int64 {
+	var startIndex, prev, current int64
+	var err error
+	prev = 0
+	current = 1
+	if startIndex, err = storage.GetValue(lastIndexKey); err == nil {
+		current, _ = storage.GetValue(strconv.Itoa(int(startIndex - 1)))
+		prev, _ = storage.GetValue(strconv.Itoa(int(startIndex - 2)))
+	} else if err == memcache.ErrCacheMiss {
+		startIndex = 2
+		if err = storage.init(); err != nil {
+			log.Fatalf("%v", err)
+		}
+	} else {
+		log.Fatalf("%v", err)
+		return 0
+	}
+
+	for i := startIndex; i <= index; i++ {
+		current, prev = current+prev, current
+		if err = storage.SaveValue(strconv.Itoa(int(i)), current); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+	storage.SaveValue(lastIndexKey, index+1)
+
+	return current
+}
+func (storage fibonacciMemcache) GetNextNegative(index int64) int64 {
+	var startIndex, prev, current int64
+	var err error
+	prev = 1
+	current = 0
+	if startIndex, err = storage.GetValue(lastNegIndexKey); err == nil {
+		current, _ = storage.GetValue(strconv.Itoa(int(startIndex + 1)))
+		prev, _ = storage.GetValue(strconv.Itoa(int(startIndex + 2)))
+	} else if err == memcache.ErrCacheMiss {
+		startIndex = -1
+		if err = storage.init(); err != nil {
+			log.Fatalf("%v", err)
+		}
+	} else {
+		log.Fatalf("%v", err)
+		return 0
+	}
+
+	for i := startIndex; i >= index; i-- {
+		current, prev = prev-current, current
+		if err = storage.SaveValue(strconv.Itoa(int(i)), current); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+	storage.SaveValue(lastNegIndexKey, index-1)
+
+	return current
+}
+
 func (storage fibonacciMemcache) GetFibonacciValue(index int64) int64 {
 	it, err := storage.GetValue(strconv.Itoa(int(index)))
-
-	if index < 1 {
-		return 0
-	}
-
-	switch index {
-	case 1:
-		return 0
-	case 2:
-		return 1
-	}
 
 	if err == nil {
 		return it
 	}
 
+	switch index {
+	case 0:
+		return 0
+	case 1:
+		return 1
+	}
+
 	if err == memcache.ErrCacheMiss {
-		var startIndex, prev, current int64
-		prev = 0
-		current = 1
-		if startIndex, err = storage.GetValue("Last"); err == nil {
-			current, _ = storage.GetValue(strconv.Itoa(int(startIndex - 1)))
-			prev, _ = storage.GetValue(strconv.Itoa(int(startIndex - 2)))
-		} else if err == memcache.ErrCacheMiss {
-			startIndex = 3
-		} else {
-			log.Fatalf("%v", err)
-			return 0
+		if index >= 0 {
+			return storage.GetNextPositive(index)
 		}
-
-		for i := startIndex; i <= index; i++ {
-			current, prev = current+prev, current
-			storage.SaveValue(strconv.Itoa(int(i)), current)
-		}
-		storage.SaveValue("Last", index+1)
-
-		return current
+		return storage.GetNextNegative(index)
 	}
 
 	if err != nil {

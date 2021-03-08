@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - MEMCACHE_HOST=memcache
+  memcache:
+    image: "sameersbn/memcached"
+    depends_on:
+      - web
