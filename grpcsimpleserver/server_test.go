@@ -1,4 +1,4 @@
-package main
+package grpcsimpleserver
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func init() {
 	lis = bufconn.Listen(bufSize)
 	s := grpc.NewServer()
 	var initValue = []int64{0, 1, 1}
-	pb.RegisterFibonacciServiceServer(s, &server{storage: fibonacciStorage{Storage: initValue}})
+	pb.RegisterFibonacciServiceServer(s, &Server{storage: fibonacciStorage{Storage: initValue}})
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Server exited with error: %v", err)

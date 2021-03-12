@@ -1,4 +1,4 @@
-package main
+package grpcsimpleserver
 
 import (
 	pb "grpc-go-server-example/grpcserver"
@@ -15,7 +15,7 @@ var storage = fibonacciMemcache{}
 func init() {
 	lis = bufconn.Listen(bufSize)
 	s := grpc.NewServer()
-	pb.RegisterFibonacciServiceServer(s, &server{storage: storage})
+	pb.RegisterFibonacciServiceServer(s, &Server{storage: storage})
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Server exited with error: %v", err)
